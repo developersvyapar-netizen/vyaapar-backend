@@ -1,0 +1,35 @@
+{
+  "name": "vyaapar-backend",
+  "version": "1.0.0",
+  "description": "Backend API for Vyaapar",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon src/index.js",
+    "start": "node src/index.js",
+    "lint": "eslint src/**/*.js",
+    "lint:fix": "eslint src/**/*.js --fix",
+    "format": "prettier --write \"src/**/*.js\"",
+    "format:check": "prettier --check \"src/**/*.js\"",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio",
+    "prisma:push": "prisma db push"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@prisma/client": "^5.19.1",
+    "express": "^4.21.1",
+    "dotenv": "^16.4.5",
+    "cors": "^2.8.5",
+    "joi": "^17.13.3"
+  },
+  "devDependencies": {
+    "prisma": "^5.19.1",
+    "eslint": "^8.57.0",
+    "prettier": "^3.3.3",
+    "nodemon": "^3.1.4"
+  }
+}
