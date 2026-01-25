@@ -2,7 +2,10 @@
  * Custom Application Error class
  */
 export class AppError extends Error {
-  constructor(message, statusCode = 500, isOperational = true) {
+  statusCode: number;
+  isOperational: boolean;
+
+  constructor(message: string, statusCode: number = 500, isOperational: boolean = true) {
     super(message);
     this.statusCode = statusCode;
     this.isOperational = isOperational;

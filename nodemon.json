@@ -1,8 +1,8 @@
 {
-  "watch": ["src"],
+  "watch": ["dist"],
   "ext": "js,json",
-  "ignore": ["src/**/*.test.js", "node_modules"],
-  "exec": "node src/index.js",
+  "ignore": ["dist/**/*.test.js", "node_modules"],
+  "exec": "node dist/index.js",
   "env": {
     "NODE_ENV": "development"
   }

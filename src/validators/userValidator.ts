@@ -1,3 +1,4 @@
+import { Request, Response, NextFunction } from 'express';
 import Joi from 'joi';
 
 // Validation schemas
@@ -7,7 +8,7 @@ const createUserSchema = Joi.object({
       'string.email': 'Please provide a valid email address',
       'any.required': 'Email is required',
     }),
-    name: Joi.string().min(2).max(100).optional().messages({
+    name: Joi.string().min(2).max(100).optional().allow(null).messages({
       'string.min': 'Name must be at least 2 characters long',
       'string.max': 'Name must not exceed 100 characters',
     }),
@@ -19,13 +20,15 @@ const updateUserSchema = Joi.object({
     email: Joi.string().email().optional().messages({
       'string.email': 'Please provide a valid email address',
     }),
-    name: Joi.string().min(2).max(100).optional().messages({
+    name: Joi.string().min(2).max(100).optional().allow(null).messages({
       'string.min': 'Name must be at least 2 characters long',
       'string.max': 'Name must not exceed 100 characters',
     }),
-  }).min(1).messages({
-    'object.min': 'At least one field must be provided for update',
-  }),
+  })
+    .min(1)
+    .messages({
+      'object.min': 'At least one field must be provided for update',
+    }),
   params: Joi.object({
     id: Joi.string().uuid().required().messages({
       'string.guid': 'Invalid user ID format',
@@ -35,7 +38,11 @@ const updateUserSchema = Joi.object({
 });
 
 // Validation middleware
-export const validateCreateUser = (req, res, next) => {
+export const validateCreateUser = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
   const { error, value } = createUserSchema.validate(
     {
       body: req.body,
@@ -52,18 +59,23 @@ export const validateCreateUser = (req, res, next) => {
       message: detail.message,
     }));
 
-    return res.status(400).json({
+    res.status(400).json({
       success: false,
       message: 'Validation failed',
       errors,
     });
+    return;
   }
 
   req.body = value.body;
   next();
 };
 
-export const validateUpdateUser = (req, res, next) => {
+export const validateUpdateUser = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
   const { error, value } = updateUserSchema.validate(
     {
       body: req.body,
@@ -81,11 +93,12 @@ export const validateUpdateUser = (req, res, next) => {
       message: detail.message,
     }));
 
-    return res.status(400).json({
+    res.status(400).json({
       success: false,
       message: 'Validation failed',
       errors,
     });
+    return;
   }
 
   req.body = value.body;

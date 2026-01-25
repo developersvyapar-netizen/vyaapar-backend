@@ -3,20 +3,23 @@
  * In production, consider using a proper logging library like Winston or Pino
  */
 
-const logLevels = {
+type LogLevel = 'ERROR' | 'WARN' | 'INFO' | 'DEBUG';
+
+const logLevels: Record<LogLevel, number> = {
   ERROR: 0,
   WARN: 1,
   INFO: 2,
   DEBUG: 3,
 };
 
-const currentLogLevel = process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'INFO' : 'DEBUG');
+const currentLogLevel: LogLevel = (process.env.LOG_LEVEL as LogLevel) || 
+  (process.env.NODE_ENV === 'production' ? 'INFO' : 'DEBUG');
 
-const shouldLog = (level) => {
+const shouldLog = (level: LogLevel): boolean => {
   return logLevels[level] <= logLevels[currentLogLevel];
 };
 
-const formatMessage = (level, message, data = {}) => {
+const formatMessage = (level: LogLevel, message: string, data: Record<string, unknown> = {}): Record<string, unknown> => {
   const timestamp = new Date().toISOString();
   return {
     timestamp,
@@ -27,22 +30,22 @@ const formatMessage = (level, message, data = {}) => {
 };
 
 export const logger = {
-  error: (message, data) => {
+  error: (message: string, data?: Record<string, unknown>): void => {
     if (shouldLog('ERROR')) {
       console.error(JSON.stringify(formatMessage('ERROR', message, data)));
     }
   },
-  warn: (message, data) => {
+  warn: (message: string, data?: Record<string, unknown>): void => {
     if (shouldLog('WARN')) {
       console.warn(JSON.stringify(formatMessage('WARN', message, data)));
     }
   },
-  info: (message, data) => {
+  info: (message: string, data?: Record<string, unknown>): void => {
     if (shouldLog('INFO')) {
       console.info(JSON.stringify(formatMessage('INFO', message, data)));
     }
   },
-  debug: (message, data) => {
+  debug: (message: string, data?: Record<string, unknown>): void => {
     if (shouldLog('DEBUG')) {
       console.debug(JSON.stringify(formatMessage('DEBUG', message, data)));
     }
