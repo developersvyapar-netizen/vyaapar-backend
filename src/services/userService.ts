@@ -1,5 +1,16 @@
+import { Prisma } from '@prisma/client';
 import prisma from '../config/database.js';
 import { AppError } from '../errors/AppError.js';
+
+interface CreateUserData {
+  email: string;
+  name?: string | null;
+}
+
+interface UpdateUserData {
+  email?: string;
+  name?: string | null;
+}
 
 /**
  * User service - Business logic layer
@@ -23,7 +34,7 @@ class UserService {
   /**
    * Get user by ID
    */
-  async getUserById(id) {
+  async getUserById(id: string) {
     const user = await prisma.user.findUnique({
       where: { id },
       select: {
@@ -45,7 +56,7 @@ class UserService {
   /**
    * Create a new user
    */
-  async createUser(data) {
+  async createUser(data: CreateUserData) {
     try {
       return await prisma.user.create({
         data: {
@@ -61,8 +72,10 @@ class UserService {
         },
       });
     } catch (error) {
-      if (error.code === 'P2002') {
-        throw new AppError('Email already exists', 409);
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2002') {
+          throw new AppError('Email already exists', 409);
+        }
       }
       throw error;
     }
@@ -71,7 +84,7 @@ class UserService {
   /**
    * Update user by ID
    */
-  async updateUser(id, data) {
+  async updateUser(id: string, data: UpdateUserData) {
     try {
       return await prisma.user.update({
         where: { id },
@@ -88,11 +101,13 @@ class UserService {
         },
       });
     } catch (error) {
-      if (error.code === 'P2025') {
-        throw new AppError('User not found', 404);
-      }
-      if (error.code === 'P2002') {
-        throw new AppError('Email already exists', 409);
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2025') {
+          throw new AppError('User not found', 404);
+        }
+        if (error.code === 'P2002') {
+          throw new AppError('Email already exists', 409);
+        }
       }
       throw error;
     }
@@ -101,15 +116,17 @@ class UserService {
   /**
    * Delete user by ID
    */
-  async deleteUser(id) {
+  async deleteUser(id: string) {
     try {
       await prisma.user.delete({
         where: { id },
       });
       return { message: 'User deleted successfully' };
     } catch (error) {
-      if (error.code === 'P2025') {
-        throw new AppError('User not found', 404);
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2025') {
+          throw new AppError('User not found', 404);
+        }
       }
       throw error;
     }

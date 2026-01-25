@@ -1,9 +1,25 @@
+import { Request, Response, NextFunction } from 'express';
 import { logger } from '../utils/logger.js';
+import { AppError } from '../errors/AppError.js';
+
+interface PrismaError extends Error {
+  code?: string;
+}
+
+interface ValidationError extends Error {
+  name: string;
+  errors?: unknown;
+}
 
 /**
  * Global error handling middleware
  */
-export const errorHandler = (err, req, res, next) => {
+export const errorHandler = (
+  err: Error | AppError | PrismaError | ValidationError,
+  req: Request,
+  res: Response,
+  _next: NextFunction
+): Response | void => {
   logger.error('Error:', {
     message: err.message,
     stack: err.stack,
@@ -12,7 +28,7 @@ export const errorHandler = (err, req, res, next) => {
   });
 
   // Prisma errors
-  if (err.code && err.code.startsWith('P')) {
+  if ('code' in err && err.code && err.code.startsWith('P')) {
     return res.status(400).json({
       success: false,
       message: 'Database error occurred',
@@ -25,12 +41,12 @@ export const errorHandler = (err, req, res, next) => {
     return res.status(400).json({
       success: false,
       message: 'Validation error',
-      errors: err.errors,
+      errors: 'errors' in err ? err.errors : undefined,
     });
   }
 
   // Custom application errors
-  if (err.statusCode) {
+  if ('statusCode' in err && err.statusCode) {
     return res.status(err.statusCode).json({
       success: false,
       message: err.message,
@@ -49,7 +65,7 @@ export const errorHandler = (err, req, res, next) => {
 /**
  * 404 Not Found handler
  */
-export const notFoundHandler = (req, res) => {
+export const notFoundHandler = (req: Request, res: Response): void => {
   res.status(404).json({
     success: false,
     message: `Route ${req.method} ${req.path} not found`,

@@ -1,83 +1,333 @@
 # Vyaapar Backend
 
-A Node.js backend API built with Express, Prisma ORM, and Supabase PostgreSQL database.
+A TypeScript Node.js backend API built with Express, Prisma ORM, and PostgreSQL database.
 
 ## Prerequisites
 
 - Node.js (v18 or higher)
 - npm or yarn
-- Supabase account with a PostgreSQL database
+- PostgreSQL database (Supabase, local PostgreSQL, or any PostgreSQL instance)
 
 ## Setup Instructions
 
-1. **Install dependencies:**
+### 1. Clone the Repository
+
+```bash
+git clone <repository-url>
+cd vyaapar-backend
+```
+
+### 2. Install Dependencies
+
+```bash
+npm install
+```
+
+This will install all required dependencies including TypeScript, Express, Prisma, and other packages.
+
+### 3. Set Up Environment Variables
+
+Create a `.env` file in the root directory (you can use `env.example` as a reference):
+
+```bash
+cp env.example .env
+```
+
+Edit the `.env` file and add your configuration:
+
+```env
+# Database Configuration
+DATABASE_URL="postgresql://user:password@host:port/database?schema=public"
+
+# Server Configuration
+PORT=3000
+NODE_ENV=development
+
+# Optional: Logging
+LOG_LEVEL=DEBUG
+```
+
+**Important:** Replace the `DATABASE_URL` with your actual PostgreSQL connection string.
+
+### 4. Generate Prisma Client
+
+After setting up your database URL, generate the Prisma Client:
+
+```bash
+npm run prisma:generate
+```
+
+This command reads your Prisma schema and generates the Prisma Client with TypeScript types.
+
+### 5. Run Database Migrations
+
+#### First Time Setup (Initial Migration)
+
+For the first time setup, create and apply the initial migration:
+
+```bash
+npm run prisma:migrate
+```
+
+This will:
+- Create a new migration file in `prisma/migrations/`
+- Apply the migration to your database
+- Create all tables defined in your Prisma schema
+
+#### Subsequent Migrations
+
+When you modify your Prisma schema (`prisma/schema.prisma`), run:
+
+```bash
+npm run prisma:migrate
+```
+
+This will:
+- Prompt you to name the migration
+- Generate a new migration file
+- Apply the changes to your database
+
+#### Alternative: Push Schema (Development Only)
+
+For quick development iterations, you can push schema changes without creating migration files:
+
+```bash
+npm run prisma:push
+```
+
+**Note:** This is useful for prototyping but should not be used in production. Always use migrations for production.
+
+### 6. Verify Database Connection
+
+The server automatically checks the database connection on startup. You can also verify it manually:
+
+```bash
+# Start the server
+npm run dev
+
+# In another terminal, check the health endpoint
+curl http://localhost:3000/health
+```
+
+The health endpoint will return:
+- `200 OK` with `database: "connected"` if the database is connected
+- `503 Service Unavailable` with `database: "disconnected"` if the database is not connected
+
+## Running the Application
+
+### Development Mode
+
+Start the development server with hot reload:
+
+```bash
+npm run dev
+```
+
+This command will:
+1. Build TypeScript files to JavaScript
+2. Watch for TypeScript changes and rebuild automatically
+3. Watch for changes in the `dist` folder and restart the server automatically
+
+The server will be available at `http://localhost:3000` (or the port specified in your `.env` file).
+
+### Production Mode
+
+1. **Build the TypeScript code:**
    ```bash
-   npm install
+   npm run build
    ```
 
-2. **Set up environment variables:**
-   - Copy `.env.example` to `.env` (if it exists) or create a `.env` file
-   - Add your Supabase PostgreSQL connection URL:
-     ```
-     DATABASE_URL="postgresql://user:password@host:port/database?schema=public"
-     ```
-   - You can find your Supabase connection string in your Supabase project settings under "Database" → "Connection string"
-
-3. **Generate Prisma Client:**
-   ```bash
-   npm run prisma:generate
-   ```
-
-4. **Run database migrations:**
-   ```bash
-   npm run prisma:migrate
-   ```
-   This will create the database schema based on your Prisma schema file.
-
-5. **Start the development server:**
-   ```bash
-   npm run dev
-   ```
-
-   Or for production:
+2. **Start the production server:**
    ```bash
    npm start
    ```
 
+The compiled JavaScript files will be in the `dist/` directory.
+
+## Database Migrations
+
+### Understanding Migrations
+
+Migrations are version-controlled database schema changes. They allow you to:
+- Track all database changes
+- Apply changes consistently across environments
+- Rollback changes if needed
+- Collaborate with team members
+
+### Migration Commands
+
+| Command | Description |
+|---------|-------------|
+| `npm run prisma:migrate` | Create and apply a new migration |
+| `npm run prisma:push` | Push schema changes without creating migration files (dev only) |
+| `npx prisma migrate reset` | Reset the database and apply all migrations |
+| `npx prisma migrate status` | Check the status of migrations |
+| `npx prisma migrate resolve --applied <migration-name>` | Mark a migration as applied |
+| `npx prisma migrate resolve --rolled-back <migration-name>` | Mark a migration as rolled back |
+
+### Creating a Migration
+
+1. **Modify your Prisma schema** (`prisma/schema.prisma`):
+   ```prisma
+   model User {
+     id        String   @id @default(uuid())
+     email     String   @unique
+     name      String?
+     createdAt DateTime @default(now())
+     updatedAt DateTime @updatedAt
+   }
+   ```
+
+2. **Create and apply the migration:**
+   ```bash
+   npm run prisma:migrate
+   ```
+
+3. **Name your migration** when prompted (e.g., `add_user_model`)
+
+4. The migration file will be created in `prisma/migrations/` and applied to your database.
+
+### Migration Workflow
+
+```bash
+# 1. Modify prisma/schema.prisma
+# 2. Create migration
+npm run prisma:migrate
+
+# 3. Review the generated migration SQL in prisma/migrations/
+# 4. Migration is automatically applied to your database
+```
+
+### Resetting the Database
+
+To reset your database and reapply all migrations (⚠️ **This will delete all data**):
+
+```bash
+npx prisma migrate reset
+```
+
+### Checking Migration Status
+
+To see which migrations have been applied:
+
+```bash
+npx prisma migrate status
+```
+
 ## Available Scripts
 
-- `npm run dev` - Start development server with watch mode
-- `npm start` - Start production server
-- `npm run prisma:generate` - Generate Prisma Client
-- `npm run prisma:migrate` - Run database migrations
-- `npm run prisma:studio` - Open Prisma Studio (database GUI)
-- `npm run prisma:push` - Push schema changes to database without migrations
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Start development server with hot reload |
+| `npm run build` | Compile TypeScript to JavaScript |
+| `npm start` | Start production server |
+| `npm run lint` | Check for linting errors |
+| `npm run lint:fix` | Auto-fix linting errors |
+| `npm run format` | Format code with Prettier |
+| `npm run format:check` | Check code formatting |
+| `npm run prisma:generate` | Generate Prisma Client |
+| `npm run prisma:migrate` | Create and apply database migrations |
+| `npm run prisma:studio` | Open Prisma Studio (database GUI) |
+| `npm run prisma:push` | Push schema changes without migrations (dev only) |
 
 ## Project Structure
+
+> For a detailed overview of the project structure, architecture, and best practices, check out [PROJECT_STRUCTURE.md](./PROJECT_STRUCTURE.md).
 
 ```
 vyaapar-backend/
 ├── src/
-│   └── index.js          # Main application entry point
+│   ├── config/           # Configuration files
+│   │   ├── database.ts  # Prisma client setup
+│   │   └── env.ts       # Environment variables
+│   ├── controllers/     # Request handlers
+│   ├── errors/          # Custom error classes
+│   ├── middleware/      # Express middleware
+│   ├── routes/          # API routes
+│   ├── services/       # Business logic
+│   ├── utils/          # Utility functions
+│   ├── validators/     # Request validation schemas
+│   └── index.ts        # Main application entry point
 ├── prisma/
-│   └── schema.prisma     # Prisma schema definition
-├── .env                  # Environment variables (not in git)
-├── .gitignore
-└── package.json
+│   ├── migrations/     # Database migration files
+│   └── schema.prisma   # Prisma schema definition
+├── dist/               # Compiled JavaScript (generated)
+├── .env               # Environment variables (not in git)
+├── tsconfig.json      # TypeScript configuration
+├── nodemon.json       # Nodemon configuration
+└── package.json       # Project dependencies and scripts
 ```
 
-## Getting Your Supabase Connection String
+## API Endpoints
+
+### Health Check
+
+```bash
+GET /health
+```
+
+Returns server and database connection status.
+
+### User API
+
+- `GET /api/users` - Get all users
+- `GET /api/users/:id` - Get user by ID
+- `POST /api/users` - Create a new user
+- `PUT /api/users/:id` - Update user
+- `DELETE /api/users/:id` - Delete user
+
+## Getting Your Database Connection String
+
+### Supabase
 
 1. Go to your Supabase project dashboard
-2. Navigate to Settings → Database
-3. Find the "Connection string" section
-4. Copy the URI connection string (it should look like: `postgresql://postgres:[YOUR-PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres`)
+2. Navigate to **Settings → Database**
+3. Find the **Connection string** section
+4. Copy the URI connection string
 5. Replace `[YOUR-PASSWORD]` with your database password
 6. Add it to your `.env` file as `DATABASE_URL`
+
+Example:
+```
+postgresql://postgres:[YOUR-PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
+```
+
+### Local PostgreSQL
+
+```
+postgresql://postgres:password@localhost:5432/vyaapar_db?schema=public
+```
+
+## Troubleshooting
+
+### Database Connection Issues
+
+1. **Check your `.env` file** - Ensure `DATABASE_URL` is correctly set
+2. **Verify database is running** - Make sure your PostgreSQL database is accessible
+3. **Check network/firewall** - Ensure your IP is whitelisted (for cloud databases)
+4. **Test connection** - Use `npm run dev` and check the startup logs
+
+### Migration Issues
+
+1. **Migration conflicts** - Use `npx prisma migrate resolve` to resolve conflicts
+2. **Schema drift** - Use `npx prisma migrate status` to check for drift
+3. **Reset database** - Use `npx prisma migrate reset` (⚠️ deletes all data)
+
+### Build Issues
+
+1. **TypeScript errors** - Run `npm run build` to see compilation errors
+2. **Missing types** - Run `npm run prisma:generate` to regenerate Prisma types
+3. **Clean build** - Delete `dist/` folder and rebuild
 
 ## Next Steps
 
 - Modify the Prisma schema (`prisma/schema.prisma`) to define your database models
-- Add your API routes in `src/index.js` or organize them in separate route files
-- Implement authentication and authorization as needed
-- Add validation middleware for request data
+- Add API routes in `src/routes/`
+- Implement authentication and authorization
+- Add request validation using Joi schemas
+- Add more middleware as needed
+- Write tests for your API endpoints
+
+## License
+
+ISC
