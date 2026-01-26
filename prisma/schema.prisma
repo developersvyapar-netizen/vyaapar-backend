@@ -11,13 +11,198 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// Example model - you can modify or remove this
+// User Roles Enum
+enum UserRole {
+  ADMIN
+  DEVELOPER
+  STOCKIST
+  DISTRIBUTOR
+  RETAILER
+  SALESPERSON
+}
+
+// Order Status Enum
+enum OrderStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+// User Model - All roles including admin
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
+  username  String   @unique
+  password  String // Hashed password
   name      String?
+  role      UserRole @default(RETAILER)
+  phone     String?
+  address   String?
+  isActive  Boolean  @default(true)
+  
+  // Relationships
+  createdBy String? // ID of admin/developer who created this user
+  creator   User?   @relation("UserCreator", fields: [createdBy], references: [id])
+  createdUsers User[] @relation("UserCreator")
+  
+  // Orders where this user is the buyer/requester
+  ordersAsBuyer Order[] @relation("OrderBuyer")
+  
+  // Orders where this user is the supplier
+  ordersAsSupplier Order[] @relation("OrderSupplier")
+  
+  // Orders where this user is the salesperson
+  ordersAsSalesperson Order[] @relation("OrderSalesperson")
+  
+  // Stock inventory for this user (Distributors, Stockists, Admin)
+  inventory Inventory[]
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("users")
+  @@index([role])
+  @@index([email])
+  @@index([username])
+}
+
+// Product/Item Model
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  sku         String   @unique
+  price       Decimal  @db.Decimal(10, 2)
+  unit        String?  // e.g., "kg", "piece", "box"
+  
+  // Relationships
+  orderLines  OrderLine[]
+  inventory   Inventory[]
+  mainStock   MainStock?  // Admin's main warehouse stock
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("products")
+  @@index([sku])
+  @@index([name])
+}
+
+// Main Stock Inventory Model - Admin's central warehouse stock
+// Admin adds items here to manage the main inventory
+model MainStock {
+  id        String   @id @default(uuid())
+  
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  
+  quantity  Int      @default(0)
+  
+  // Tracking who added/updated stock
+  lastUpdatedBy String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([productId])
+  @@map("main_stock")
+  @@index([productId])
+}
+
+// Inventory Model - Tracks stock for Distributors, Stockists, and Admin
+// When Admin supplies to Stockists, it comes from MainStock
+model Inventory {
+  id        String   @id @default(uuid())
+  
+  userId    String   // Distributor, Stockist, or Admin
+  user      User     @relation(fields: [userId], references: [id])
+  
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  
+  quantity  Int      @default(0)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, productId])
+  @@map("inventory")
+  @@index([userId])
+  @@index([productId])
+}
+
+// Order Model
+// Represents a purchase order from buyer to supplier
+// Examples:
+// - Retailer (buyer) -> Distributor (supplier)
+// - Distributor (buyer) -> Stockist (supplier)
+// - Stockist (buyer) -> Admin (supplier)
+model Order {
+  id            String      @id @default(uuid())
+  orderNumber   String      @unique
+  
+  // Buyer (retailer, distributor, or stockist)
+  buyerId       String
+  buyer         User        @relation("OrderBuyer", fields: [buyerId], references: [id])
+  
+  // Supplier (distributor, stockist, or admin)
+  supplierId    String
+  supplier      User        @relation("OrderSupplier", fields: [supplierId], references: [id])
+  
+  // Salesperson who created the order on behalf of buyer
+  salespersonId String
+  salesperson   User        @relation("OrderSalesperson", fields: [salespersonId], references: [id])
+  
+  status        OrderStatus @default(PENDING)
+  totalAmount   Decimal     @db.Decimal(10, 2) @default(0)
+  notes         String?
+  
+  // Order lines
+  orderLines    OrderLine[]
+  
+  // Approval tracking
+  approvedAt    DateTime?
+  approvedBy    String?     // User ID who approved
+  
+  // Cancellation tracking (only SALESPERSON or ADMIN can cancel)
+  cancelledAt   DateTime?
+  cancelledBy   String?     // User ID who cancelled (must be SALESPERSON or ADMIN)
+  cancelReason  String?
+  
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@map("orders")
+  @@index([buyerId])
+  @@index([supplierId])
+  @@index([salespersonId])
+  @@index([status])
+  @@index([orderNumber])
+}
+
+// Order Line Model - Individual items in an order
+model OrderLine {
+  id            String   @id @default(uuid())
+  orderId       String
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id])
+  
+  quantity      Int
+  unitPrice     Decimal  @db.Decimal(10, 2)
+  totalPrice    Decimal  @db.Decimal(10, 2)
+  
+  notes         String?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("order_lines")
+  @@index([orderId])
+  @@index([productId])
 }
