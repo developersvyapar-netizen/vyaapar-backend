@@ -36,8 +36,8 @@ enum OrderStatus {
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
-  username  String   @unique
-  password  String // Hashed password
+  loginId   String   @unique // Unique login ID for authentication
+  password  String   // Hashed password (never stored in plain text)
   name      String?
   role      UserRole @default(RETAILER)
   phone     String?
@@ -67,7 +67,7 @@ model User {
   @@map("users")
   @@index([role])
   @@index([email])
-  @@index([username])
+  @@index([loginId])
 }
 
 // Product/Item Model
