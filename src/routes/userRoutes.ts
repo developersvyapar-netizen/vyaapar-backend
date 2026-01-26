@@ -2,19 +2,19 @@ import express from 'express';
 import {
   getAllUsers,
   getUserById,
-  createUser,
   updateUser,
   deleteUser,
 } from '../controllers/userController.js';
-import { validateCreateUser, validateUpdateUser } from '../validators/userValidator.js';
+import { validateUpdateUser } from '../validators/userValidator.js';
+import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// User routes
-router.get('/', getAllUsers);
-router.get('/:id', getUserById);
-router.post('/', validateCreateUser, createUser);
-router.put('/:id', validateUpdateUser, updateUser);
-router.delete('/:id', deleteUser);
+// User routes (all require authentication)
+router.get('/', authenticate, getAllUsers);
+router.get('/:id', authenticate, getUserById);
+// Note: User creation is now handled by /api/auth/users (admin only)
+router.put('/:id', authenticate, validateUpdateUser, updateUser);
+router.delete('/:id', authenticate, deleteUser);
 
 export default router;

@@ -59,43 +59,6 @@ export const getUserById = async (req: Request, res: Response, next: NextFunctio
 };
 
 /**
- * Create a new user
- */
-export const createUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const { email, name } = req.body;
-
-    const user = await prisma.user.create({
-      data: {
-        email,
-        name,
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
-
-    res.status(201).json({
-      success: true,
-      data: user,
-    });
-  } catch (error) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
-      res.status(409).json({
-        success: false,
-        message: 'Email already exists',
-      });
-      return;
-    }
-    next(error);
-  }
-};
-
-/**
  * Update user by ID
  */
 export const updateUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

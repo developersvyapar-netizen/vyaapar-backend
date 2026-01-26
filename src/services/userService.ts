@@ -2,11 +2,6 @@ import { Prisma } from '@prisma/client';
 import prisma from '../config/database.js';
 import { AppError } from '../errors/AppError.js';
 
-interface CreateUserData {
-  email: string;
-  name?: string | null;
-}
-
 interface UpdateUserData {
   email?: string;
   name?: string | null;
@@ -51,34 +46,6 @@ class UserService {
     }
 
     return user;
-  }
-
-  /**
-   * Create a new user
-   */
-  async createUser(data: CreateUserData) {
-    try {
-      return await prisma.user.create({
-        data: {
-          email: data.email,
-          name: data.name,
-        },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2002') {
-          throw new AppError('Email already exists', 409);
-        }
-      }
-      throw error;
-    }
   }
 
   /**
