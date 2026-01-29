@@ -32,6 +32,13 @@ enum OrderStatus {
   CANCELLED
 }
 
+// Attendance Status Enum
+enum AttendanceStatus {
+  LOGGED_IN
+  LOGGED_OUT
+  INCOMPLETE
+}
+
 // User Model - All roles including admin
 model User {
   id        String   @id @default(uuid())
@@ -60,6 +67,9 @@ model User {
   
   // Stock inventory for this user (Distributors, Stockists, Admin)
   inventory Inventory[]
+  
+  // Attendance logs for salespersons
+  attendanceLogs AttendanceLog[] @relation("SalespersonAttendance")
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -205,4 +215,27 @@ model OrderLine {
   @@map("order_lines")
   @@index([orderId])
   @@index([productId])
+}
+
+// Attendance Log Model - Tracks salesperson daily login/logout times
+model AttendanceLog {
+  id            String           @id @default(uuid())
+  
+  salespersonId String
+  salesperson   User             @relation("SalespersonAttendance", fields: [salespersonId], references: [id])
+  
+  loginTime     DateTime
+  logoutTime    DateTime?
+  date          DateTime         @db.Date // Store date only (without time)
+  totalHours    Decimal?         @db.Decimal(5, 2) // Calculated hours worked
+  status        AttendanceStatus @default(LOGGED_IN)
+  
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@unique([salespersonId, date])
+  @@map("attendance_logs")
+  @@index([salespersonId])
+  @@index([date])
+  @@index([status])
 }
