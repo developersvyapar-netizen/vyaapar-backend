@@ -1,6 +1,6 @@
 # Vyaapar Backend
 
-A TypeScript Node.js backend API built with Express, Prisma ORM, and PostgreSQL database.
+A TypeScript backend API built with **Next.js** (App Router), Prisma ORM, and PostgreSQL database.
 
 ## Prerequisites
 
@@ -23,14 +23,14 @@ cd vyaapar-backend
 npm install
 ```
 
-This will install all required dependencies including TypeScript, Express, Prisma, and other packages.
+This will install all required dependencies including Next.js, Prisma, and other packages.
 
 ### 3. Set Up Environment Variables
 
-Create a `.env` file in the root directory (you can use `env.example` as a reference):
+Create a `.env` or `.env.local` file in the root directory (use `env.template` as reference):
 
 ```bash
-cp env.example .env
+cp env.template .env.local
 ```
 
 Edit the `.env` file and add your configuration:
@@ -117,32 +117,25 @@ The health endpoint will return:
 
 ### Development Mode
 
-Start the development server with hot reload:
+Start the Next.js development server with hot reload:
 
 ```bash
 npm run dev
 ```
 
-This command will:
-1. Build TypeScript files to JavaScript
-2. Watch for TypeScript changes and rebuild automatically
-3. Watch for changes in the `dist` folder and restart the server automatically
-
-The server will be available at `http://localhost:3000` (or the port specified in your `.env` file).
+The server will be available at `http://localhost:3000` (or the port in your `.env`).
 
 ### Production Mode
 
-1. **Build the TypeScript code:**
+1. **Build:**
    ```bash
    npm run build
    ```
 
-2. **Start the production server:**
+2. **Start:**
    ```bash
    npm start
    ```
-
-The compiled JavaScript files will be in the `dist/` directory.
 
 ## Database Migrations
 
@@ -218,11 +211,10 @@ npx prisma migrate status
 
 | Script | Description |
 |--------|-------------|
-| `npm run dev` | Start development server with hot reload |
-| `npm run build` | Compile TypeScript to JavaScript |
+| `npm run dev` | Start Next.js development server |
+| `npm run build` | Build Next.js for production |
 | `npm start` | Start production server |
-| `npm run lint` | Check for linting errors |
-| `npm run lint:fix` | Auto-fix linting errors |
+| `npm run lint` | Run ESLint |
 | `npm run format` | Format code with Prettier |
 | `npm run format:check` | Check code formatting |
 | `npm run prisma:generate` | Generate Prisma Client |
@@ -232,30 +224,29 @@ npx prisma migrate status
 
 ## Project Structure
 
-> For a detailed overview of the project structure, architecture, and best practices, check out [PROJECT_STRUCTURE.md](./PROJECT_STRUCTURE.md).
-
 ```
 vyaapar-backend/
-├── src/
-│   ├── config/           # Configuration files
-│   │   ├── database.ts  # Prisma client setup
-│   │   └── env.ts       # Environment variables
-│   ├── controllers/     # Request handlers
-│   ├── errors/          # Custom error classes
-│   ├── middleware/      # Express middleware
-│   ├── routes/          # API routes
-│   ├── services/       # Business logic
-│   ├── utils/          # Utility functions
-│   ├── validators/     # Request validation schemas
-│   └── index.ts        # Main application entry point
+├── app/
+│   ├── api/            # Next.js API routes
+│   │   ├── auth/       # Login, me, users (admin)
+│   │   ├── users/      # User CRUD
+│   │   ├── dashboard/  # Role-specific dashboards
+│   │   └── health/     # Health check
+│   ├── health/         # GET /health
+│   ├── layout.tsx
+│   └── page.tsx
+├── lib/
+│   ├── config/         # Database, env
+│   ├── services/       # Business logic (auth, user)
+│   ├── validators/     # Joi schemas
+│   ├── errors/         # AppError
+│   ├── utils/          # Logger
+│   ├── auth.ts         # getAuth, requireAdmin, requireRoleDashboard
+│   └── errorHandler.ts
 ├── prisma/
-│   ├── migrations/     # Database migration files
-│   └── schema.prisma   # Prisma schema definition
-├── dist/               # Compiled JavaScript (generated)
-├── .env               # Environment variables (not in git)
-├── tsconfig.json      # TypeScript configuration
-├── nodemon.json       # Nodemon configuration
-└── package.json       # Project dependencies and scripts
+│   └── schema.prisma
+├── .env.local          # Environment variables (not in git)
+└── package.json
 ```
 
 ## API Endpoints

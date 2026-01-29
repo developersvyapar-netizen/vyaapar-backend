@@ -33,4 +33,5 @@ Thumbs.db
 # Build
 dist/
 build/
+.next/
 *.tsbuildinfo
