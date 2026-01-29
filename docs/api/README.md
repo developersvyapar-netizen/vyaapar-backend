@@ -25,6 +25,7 @@ Authorization: Bearer <your_jwt_token>
 | [Users](./users.md) | User CRUD operations | [View Docs](./users.md) |
 | [Dashboard](./dashboard.md) | Role-specific dashboards | [View Docs](./dashboard.md) |
 | [Attendance](./attendance.md) | Salesperson time tracking | [View Docs](./attendance.md) |
+| [Cart](./cart.md) | Shopping cart and order creation | [View Docs](./cart.md) |
 | [Health](./health.md) | Server health checks | [View Docs](./health.md) |
 
 ## User Roles
@@ -36,7 +37,7 @@ Authorization: Bearer <your_jwt_token>
 | `STOCKIST` | Stock manager | Stockist dashboard, orders |
 | `DISTRIBUTOR` | Product distributor | Distributor dashboard, orders |
 | `RETAILER` | Retail seller | Retailer dashboard, orders |
-| `SALESPERSON` | Sales representative | Salesperson dashboard, attendance tracking |
+| `SALESPERSON` | Sales representative | Salesperson dashboard, attendance tracking, cart & orders |
 
 ## Quick Start
 
@@ -156,6 +157,7 @@ Currently, there is no rate limiting implemented. For production, consider addin
 |---------|------|---------|
 | 1.0.0 | 2026-01-29 | Initial API release |
 | 1.1.0 | 2026-01-29 | Added Attendance tracking feature |
+| 1.2.0 | 2026-01-30 | Added Cart and order creation for salespersons |
 
 ---
 

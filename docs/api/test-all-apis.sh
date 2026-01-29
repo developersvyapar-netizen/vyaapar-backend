@@ -69,7 +69,7 @@ print_header "HEALTH CHECK API"
 
 RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/health")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "GET /api/health" 200 "$HTTP_CODE" "$BODY"
 
 # ============================================
@@ -82,7 +82,7 @@ RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/auth/login" \
   -H "Content-Type: application/json" \
   -d '{"loginId": "admin", "password": "admin123"}')
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "POST /api/auth/login (admin)" 200 "$HTTP_CODE" "$BODY"
 ADMIN_TOKEN=$(echo "$BODY" | jq -r '.data.token')
 
@@ -91,20 +91,20 @@ RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/auth/login" \
   -H "Content-Type: application/json" \
   -d '{"loginId": "admin", "password": "wrongpassword"}')
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "POST /api/auth/login (invalid creds)" 401 "$HTTP_CODE" "$BODY"
 
 # Test 3: Get current user profile
 RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/auth/me" \
   -H "Authorization: Bearer $ADMIN_TOKEN")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "GET /api/auth/me" 200 "$HTTP_CODE" "$BODY"
 
 # Test 4: Get profile without token
 RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/auth/me")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "GET /api/auth/me (no token)" 401 "$HTTP_CODE" "$BODY"
 
 # Test 5: Create new user
@@ -119,7 +119,7 @@ RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/auth/users" \
     \"email\": \"testuser$RANDOM_ID@example.com\"
   }")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "POST /api/auth/users (create user)" 201 "$HTTP_CODE" "$BODY"
 NEW_USER_ID=$(echo "$BODY" | jq -r '.data.id')
 
@@ -132,14 +132,14 @@ print_header "USERS API"
 RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/users" \
   -H "Authorization: Bearer $ADMIN_TOKEN")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "GET /api/users" 200 "$HTTP_CODE" "$BODY"
 
 # Test 7: Get user by ID
 RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/users/$NEW_USER_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "GET /api/users/:id" 200 "$HTTP_CODE" "$BODY"
 
 # Test 8: Update user
@@ -148,21 +148,21 @@ RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT "$BASE_URL/api/users/$NEW_USER_ID"
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -d '{"name": "Updated Name"}')
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "PUT /api/users/:id" 200 "$HTTP_CODE" "$BODY"
 
 # Test 9: Delete user
 RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE "$BASE_URL/api/users/$NEW_USER_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "DELETE /api/users/:id" 200 "$HTTP_CODE" "$BODY"
 
 # Test 10: Get deleted user (should 404)
 RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/users/$NEW_USER_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "GET /api/users/:id (deleted user)" 404 "$HTTP_CODE" "$BODY"
 
 # ============================================
@@ -174,7 +174,7 @@ print_header "DASHBOARD API"
 RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/dashboard/shared" \
   -H "Authorization: Bearer $ADMIN_TOKEN")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "GET /api/dashboard/shared" 200 "$HTTP_CODE" "$BODY"
 
 # Login as different users for role-specific dashboards
@@ -188,7 +188,7 @@ RETAILER_TOKEN=$(echo "$RETAILER_RESPONSE" | jq -r '.data.token')
 RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/dashboard/retailer" \
   -H "Authorization: Bearer $RETAILER_TOKEN")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "GET /api/dashboard/retailer" 200 "$HTTP_CODE" "$BODY"
 
 # Distributor
@@ -201,7 +201,7 @@ DIST_TOKEN=$(echo "$DIST_RESPONSE" | jq -r '.data.token')
 RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/dashboard/distributor" \
   -H "Authorization: Bearer $DIST_TOKEN")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "GET /api/dashboard/distributor" 200 "$HTTP_CODE" "$BODY"
 
 # Stockist
@@ -214,7 +214,7 @@ STOCK_TOKEN=$(echo "$STOCK_RESPONSE" | jq -r '.data.token')
 RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/dashboard/stockist" \
   -H "Authorization: Bearer $STOCK_TOKEN")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "GET /api/dashboard/stockist" 200 "$HTTP_CODE" "$BODY"
 
 # Salesperson
@@ -228,14 +228,14 @@ SALES_ID=$(echo "$SALES_RESPONSE" | jq -r '.data.user.id')
 RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/dashboard/salesperson" \
   -H "Authorization: Bearer $SALES_TOKEN")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "GET /api/dashboard/salesperson" 200 "$HTTP_CODE" "$BODY"
 
 # Test 16: Access control - retailer trying distributor dashboard
 RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/dashboard/distributor" \
   -H "Authorization: Bearer $RETAILER_TOKEN")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "GET /api/dashboard/distributor (wrong role)" 403 "$HTTP_CODE" "$BODY"
 
 # ============================================
@@ -247,7 +247,7 @@ print_header "ATTENDANCE API"
 RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/attendance/login" \
   -H "Authorization: Bearer $SALES_TOKEN")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "GET /api/attendance/login (check status)" 200 "$HTTP_CODE" "$BODY"
 
 # Check if already logged in today
@@ -258,7 +258,7 @@ if [ "$ALREADY_LOGGED" != "true" ]; then
   RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/attendance/login" \
     -H "Authorization: Bearer $SALES_TOKEN")
   HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-  BODY=$(echo "$RESPONSE" | head -n -1)
+  BODY=$(echo "$RESPONSE" | sed '$d')
   print_result "POST /api/attendance/login" 200 "$HTTP_CODE" "$BODY"
 else
   echo -e "${YELLOW}⏭️  SKIP${NC} - POST /api/attendance/login (already logged in today)"
@@ -268,14 +268,14 @@ fi
 RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/attendance/login" \
   -H "Authorization: Bearer $SALES_TOKEN")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "POST /api/attendance/login (duplicate)" 400 "$HTTP_CODE" "$BODY"
 
 # Test 20: Non-salesperson trying to login
 RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/attendance/login" \
   -H "Authorization: Bearer $RETAILER_TOKEN")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "POST /api/attendance/login (wrong role)" 403 "$HTTP_CODE" "$BODY"
 
 # Check if already logged out
@@ -287,7 +287,7 @@ if [ "$ALREADY_LOGGED_OUT" != "true" ]; then
   RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/attendance/logout" \
     -H "Authorization: Bearer $SALES_TOKEN")
   HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-  BODY=$(echo "$RESPONSE" | head -n -1)
+  BODY=$(echo "$RESPONSE" | sed '$d')
   print_result "POST /api/attendance/logout" 200 "$HTTP_CODE" "$BODY"
 else
   echo -e "${YELLOW}⏭️  SKIP${NC} - POST /api/attendance/logout (already logged out today)"
@@ -297,36 +297,131 @@ fi
 RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/attendance/my-history" \
   -H "Authorization: Bearer $SALES_TOKEN")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "GET /api/attendance/my-history" 200 "$HTTP_CODE" "$BODY"
 
 # Test 23: Admin - Get all attendance
 RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/attendance/all" \
   -H "Authorization: Bearer $ADMIN_TOKEN")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "GET /api/attendance/all (admin)" 200 "$HTTP_CODE" "$BODY"
 
 # Test 24: Admin - Get specific salesperson attendance
 RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/attendance/salesperson/$SALES_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "GET /api/attendance/salesperson/:id (admin)" 200 "$HTTP_CODE" "$BODY"
 
 # Test 25: Admin - Get attendance report
 RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/attendance/report" \
   -H "Authorization: Bearer $ADMIN_TOKEN")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "GET /api/attendance/report (admin)" 200 "$HTTP_CODE" "$BODY"
 
 # Test 26: Non-admin trying admin endpoint
 RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/attendance/all" \
   -H "Authorization: Bearer $SALES_TOKEN")
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-BODY=$(echo "$RESPONSE" | head -n -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
 print_result "GET /api/attendance/all (non-admin)" 403 "$HTTP_CODE" "$BODY"
+
+# ============================================
+#               CART API
+# ============================================
+print_header "CART API"
+
+# Get retailer and distributor IDs for buyer/supplier (from auth/me)
+RETAILER_ME=$(curl -s "$BASE_URL/api/auth/me" -H "Authorization: Bearer $RETAILER_TOKEN")
+RETAILER_ID=$(echo "$RETAILER_ME" | jq -r '.data.id')
+DIST_ME=$(curl -s "$BASE_URL/api/auth/me" -H "Authorization: Bearer $DIST_TOKEN")
+DIST_ID=$(echo "$DIST_ME" | jq -r '.data.id')
+
+# Test 27: GET cart (salesperson)
+RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/cart" \
+  -H "Authorization: Bearer $SALES_TOKEN")
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+BODY=$(echo "$RESPONSE" | sed '$d')
+print_result "GET /api/cart (salesperson)" 200 "$HTTP_CODE" "$BODY"
+
+# Test 28: GET cart (non-salesperson) - 403
+RESPONSE=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/cart" \
+  -H "Authorization: Bearer $ADMIN_TOKEN")
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+BODY=$(echo "$RESPONSE" | sed '$d')
+print_result "GET /api/cart (non-salesperson)" 403 "$HTTP_CODE" "$BODY"
+
+# Test 29: POST cart/items - validation error (missing productId)
+RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/cart/items" \
+  -H "Authorization: Bearer $SALES_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"quantity": 2}')
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+BODY=$(echo "$RESPONSE" | sed '$d')
+print_result "POST /api/cart/items (validation - missing productId)" 400 "$HTTP_CODE" "$BODY"
+
+# Test 30: POST cart/items - invalid product (404)
+FAKE_PRODUCT_ID="00000000-0000-4000-8000-000000000001"
+RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/cart/items" \
+  -H "Authorization: Bearer $SALES_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"productId\": \"$FAKE_PRODUCT_ID\", \"quantity\": 2}")
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+BODY=$(echo "$RESPONSE" | sed '$d')
+print_result "POST /api/cart/items (product not found)" 404 "$HTTP_CODE" "$BODY"
+
+# Test 31: PUT cart/buyer - set retailer as buyer
+RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT "$BASE_URL/api/cart/buyer" \
+  -H "Authorization: Bearer $SALES_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"buyerId\": \"$RETAILER_ID\"}")
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+BODY=$(echo "$RESPONSE" | sed '$d')
+print_result "PUT /api/cart/buyer (set retailer)" 200 "$HTTP_CODE" "$BODY"
+
+# Test 32: PUT cart/supplier - set distributor as supplier
+RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT "$BASE_URL/api/cart/supplier" \
+  -H "Authorization: Bearer $SALES_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"supplierId\": \"$DIST_ID\"}")
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+BODY=$(echo "$RESPONSE" | sed '$d')
+print_result "PUT /api/cart/supplier (set distributor)" 200 "$HTTP_CODE" "$BODY"
+
+# Test 33: POST cart/checkout - empty cart should fail with 400
+RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/cart/checkout" \
+  -H "Authorization: Bearer $SALES_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{}')
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+BODY=$(echo "$RESPONSE" | sed '$d')
+print_result "POST /api/cart/checkout (empty cart)" 400 "$HTTP_CODE" "$BODY"
+
+# Test 34: PUT cart/items/:itemId - non-existent item 404
+FAKE_ITEM_ID="00000000-0000-4000-8000-000000000002"
+RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT "$BASE_URL/api/cart/items/$FAKE_ITEM_ID" \
+  -H "Authorization: Bearer $SALES_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"quantity": 3}')
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+BODY=$(echo "$RESPONSE" | sed '$d')
+print_result "PUT /api/cart/items/:itemId (item not found)" 404 "$HTTP_CODE" "$BODY"
+
+# Test 35: DELETE cart - clear entire cart
+RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE "$BASE_URL/api/cart" \
+  -H "Authorization: Bearer $SALES_TOKEN")
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+BODY=$(echo "$RESPONSE" | sed '$d')
+print_result "DELETE /api/cart (clear cart)" 200 "$HTTP_CODE" "$BODY"
+
+# Test 36: DELETE cart/items/:itemId - non-existent item 404
+RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE "$BASE_URL/api/cart/items/$FAKE_ITEM_ID" \
+  -H "Authorization: Bearer $SALES_TOKEN")
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+BODY=$(echo "$RESPONSE" | sed '$d')
+print_result "DELETE /api/cart/items/:itemId (item not found)" 404 "$HTTP_CODE" "$BODY"
 
 # ============================================
 #               SUMMARY
