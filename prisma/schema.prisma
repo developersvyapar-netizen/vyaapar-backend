@@ -32,6 +32,13 @@ enum OrderStatus {
   CANCELLED
 }
 
+// Attendance Status Enum
+enum AttendanceStatus {
+  LOGGED_IN
+  LOGGED_OUT
+  INCOMPLETE
+}
+
 // User Model - All roles including admin
 model User {
   id        String   @id @default(uuid())
@@ -61,6 +68,14 @@ model User {
   // Stock inventory for this user (Distributors, Stockists, Admin)
   inventory Inventory[]
   
+  // Attendance logs for salespersons
+  attendanceLogs AttendanceLog[] @relation("SalespersonAttendance")
+
+  // Cart (one per salesperson)
+  cart Cart? @relation("SalespersonCart")
+  cartsAsBuyer Cart[] @relation("CartBuyer")
+  cartsAsSupplier Cart[] @relation("CartSupplier")
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -83,7 +98,8 @@ model Product {
   orderLines  OrderLine[]
   inventory   Inventory[]
   mainStock   MainStock?  // Admin's main warehouse stock
-  
+  cartItems   CartItem[]
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -184,6 +200,41 @@ model Order {
   @@index([orderNumber])
 }
 
+// Cart Model - Session-based cart for salesperson before creating order
+model Cart {
+  id            String    @id @default(uuid())
+  salespersonId String    @unique
+  salesperson   User      @relation("SalespersonCart", fields: [salespersonId], references: [id], onDelete: Cascade)
+  buyerId       String?
+  buyer         User?     @relation("CartBuyer", fields: [buyerId], references: [id], onDelete: SetNull)
+  supplierId    String?
+  supplier      User?     @relation("CartSupplier", fields: [supplierId], references: [id], onDelete: SetNull)
+  items         CartItem[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("carts")
+  @@index([salespersonId])
+}
+
+// Cart Item Model - Items in cart with quantity and snapshot price
+model CartItem {
+  id        String   @id @default(uuid())
+  cartId    String
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  quantity  Int
+  unitPrice Decimal  @db.Decimal(10, 2) // Price at time of adding to cart
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([cartId, productId])
+  @@map("cart_items")
+  @@index([cartId])
+  @@index([productId])
+}
+
 // Order Line Model - Individual items in an order
 model OrderLine {
   id            String   @id @default(uuid())
@@ -205,4 +256,27 @@ model OrderLine {
   @@map("order_lines")
   @@index([orderId])
   @@index([productId])
+}
+
+// Attendance Log Model - Tracks salesperson daily login/logout times
+model AttendanceLog {
+  id            String           @id @default(uuid())
+  
+  salespersonId String
+  salesperson   User             @relation("SalespersonAttendance", fields: [salespersonId], references: [id])
+  
+  loginTime     DateTime
+  logoutTime    DateTime?
+  date          DateTime         @db.Date // Store date only (without time)
+  totalHours    Decimal?         @db.Decimal(5, 2) // Calculated hours worked
+  status        AttendanceStatus @default(LOGGED_IN)
+  
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@unique([salespersonId, date])
+  @@map("attendance_logs")
+  @@index([salespersonId])
+  @@index([date])
+  @@index([status])
 }

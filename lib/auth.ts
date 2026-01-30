@@ -42,3 +42,9 @@ export function requireRoleDashboard(role: UserRole, user: AuthUser): void {
     throw new AppError(`Access denied. This dashboard is only accessible to ${role} users.`, 403);
   }
 }
+
+export function requireSalesperson(user: AuthUser): void {
+  if (user.role !== 'SALESPERSON') {
+    throw new AppError('Access denied. This resource is only accessible to salespersons.', 403);
+  }
+}
