@@ -21,6 +21,7 @@ This document covers the shopping cart and order creation endpoints. Salesperson
 | `/api/cart/buyer` | PUT | Yes | SALESPERSON |
 | `/api/cart/supplier` | PUT | Yes | SALESPERSON |
 | `/api/cart/checkout` | POST | Yes | SALESPERSON |
+| `/api/orders/:id` | GET | Yes | ADMIN, DEVELOPER, or order's salesperson |
 
 ---
 
@@ -326,6 +327,67 @@ curl -X POST http://localhost:3000/api/cart/checkout \
 **Please select a buyer before checkout (400)**  
 **Please select a supplier before checkout (400)**  
 **Validation failed (400)** – e.g. notes too long
+
+---
+
+## View Single Order
+
+### GET /api/orders/:id
+
+Get a single order with full details: order lines (with product snapshot), buyer, supplier, and salesperson. Useful for viewing order details after creation or from the dashboard list.
+
+**Access:** ADMIN, DEVELOPER, or the salesperson who created the order. Others receive 403.
+
+#### Request
+
+```bash
+curl http://localhost:3000/api/orders/ORDER_UUID \
+  -H "Authorization: Bearer JWT_TOKEN"
+```
+
+#### Success Response (200)
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "order-uuid",
+    "orderNumber": "ORD-20260130-00001",
+    "buyerId": "...",
+    "supplierId": "...",
+    "salespersonId": "...",
+    "status": "PENDING",
+    "totalAmount": "199.98",
+    "notes": "Urgent delivery",
+    "approvedAt": null,
+    "approvedBy": null,
+    "cancelledAt": null,
+    "cancelledBy": null,
+    "cancelReason": null,
+    "orderLines": [
+      {
+        "id": "...",
+        "productId": "...",
+        "quantity": 2,
+        "unitPrice": "99.99",
+        "totalPrice": "199.98",
+        "notes": null,
+        "product": { "id": "...", "name": "...", "sku": "...", "unit": "..." }
+      }
+    ],
+    "buyer": { "id": "...", "name": "...", "loginId": "...", "role": "RETAILER", "email": "...", "phone": "..." },
+    "supplier": { "id": "...", "name": "...", "loginId": "...", "role": "DISTRIBUTOR", "email": "...", "phone": "..." },
+    "salesperson": { "id": "...", "name": "...", "loginId": "..." },
+    "createdAt": "...",
+    "updatedAt": "..."
+  }
+}
+```
+
+#### Error Responses
+
+**Order not found (404)**  
+**Access denied (403)** – User is not admin and not the salesperson who created the order
 
 ---
 

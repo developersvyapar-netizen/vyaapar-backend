@@ -158,6 +158,7 @@ Currently, there is no rate limiting implemented. For production, consider addin
 | 1.0.0 | 2026-01-29 | Initial API release |
 | 1.1.0 | 2026-01-29 | Added Attendance tracking feature |
 | 1.2.0 | 2026-01-30 | Added Cart and order creation for salespersons |
+| 1.3.0 | 2026-01-30 | Added GET /api/orders/:id to view single order (Admin or salesperson) |
 
 ---
 
