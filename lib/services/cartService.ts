@@ -291,27 +291,31 @@ async function checkout(salespersonId: string, notes?: string) {
 
   const orderNumber = await generateOrderNumber();
 
-  const order = await prisma.$transaction(async (tx) => {
-    let totalAmount = new Decimal(0);
-    const orderLinesData: Array<{
-      productId: string;
-      quantity: number;
-      unitPrice: Decimal;
-      totalPrice: Decimal;
-    }> = [];
+  // Compute totals and order lines data before the transaction
+  let totalAmount = new Decimal(0);
+  const orderLinesData: Array<{
+    productId: string;
+    quantity: number;
+    unitPrice: Decimal;
+    totalPrice: Decimal;
+  }> = [];
 
-    for (const item of cart.items) {
-      const totalPrice = new Decimal(item.unitPrice).mul(item.quantity);
-      totalAmount = totalAmount.add(totalPrice);
-      orderLinesData.push({
-        productId: item.productId,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        totalPrice,
-      });
-    }
+  for (const item of cart.items) {
+    const totalPrice = new Decimal(item.unitPrice).mul(item.quantity);
+    totalAmount = totalAmount.add(totalPrice);
+    orderLinesData.push({
+      productId: item.productId,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      totalPrice,
+    });
+  }
 
-    const order = await tx.order.create({
+  // Use batch transaction (compatible with PgBouncer connection pooling)
+  // Interactive transactions ($transaction(async (tx) => {...})) are NOT supported
+  // with PgBouncer in transaction pooling mode.
+  const [order] = await prisma.$transaction([
+    prisma.order.create({
       data: {
         orderNumber,
         buyerId: cart.buyerId!,
@@ -333,19 +337,18 @@ async function checkout(salespersonId: string, notes?: string) {
         buyer: { select: { id: true, name: true, loginId: true, role: true } },
         supplier: { select: { id: true, name: true, loginId: true, role: true } },
       },
-    });
-
-    await tx.cart.update({
+    }),
+    prisma.cartItem.deleteMany({
+      where: { cartId: cart.id },
+    }),
+    prisma.cart.update({
       where: { id: cart.id },
       data: {
-        items: { deleteMany: {} },
         buyerId: null,
         supplierId: null,
       },
-    });
-
-    return order;
-  });
+    }),
+  ]);
 
   return order;
 }
