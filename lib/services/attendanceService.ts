@@ -19,20 +19,33 @@ interface MyHistoryFilters {
 }
 
 /**
+ * IST (Indian Standard Time) offset: UTC+5:30
+ */
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+/**
  * Attendance service - Handles salesperson attendance tracking
+ * All times are stored in IST (Indian Standard Time, UTC+5:30)
  */
 class AttendanceService {
   /**
-   * Get today's date at midnight (UTC)
+   * Get current time in IST
    */
-  private getTodayDate(): Date {
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
-    return today;
+  private getNowIST(): Date {
+    return new Date(Date.now() + IST_OFFSET_MS);
   }
 
   /**
-   * Calculate hours between two dates
+   * Get today's date at midnight in IST
+   */
+  private getTodayDate(): Date {
+    const nowIST = this.getNowIST();
+    nowIST.setUTCHours(0, 0, 0, 0);
+    return nowIST;
+  }
+
+  /**
+   * Calculate hours between two IST timestamps
    */
   private calculateHours(loginTime: Date, logoutTime: Date): number {
     const diffMs = logoutTime.getTime() - loginTime.getTime();
@@ -45,7 +58,7 @@ class AttendanceService {
    */
   async recordLogin(salespersonId: string) {
     const today = this.getTodayDate();
-    const now = new Date();
+    const now = this.getNowIST();
 
     // Check if already logged in today
     const existingLog = await prisma.attendanceLog.findUnique({
@@ -95,7 +108,7 @@ class AttendanceService {
    */
   async recordLogout(salespersonId: string) {
     const today = this.getTodayDate();
-    const now = new Date();
+    const now = this.getNowIST();
 
     // Find today's login record
     const attendanceLog = await prisma.attendanceLog.findUnique({
