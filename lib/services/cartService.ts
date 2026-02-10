@@ -273,6 +273,7 @@ async function generateOrderNumber(): Promise<string> {
 
 /**
  * Create order from cart (checkout). Validates items, buyer, supplier. Clears cart on success.
+ * Retries up to 3 times on order number collision (P2002 unique constraint).
  */
 async function checkout(salespersonId: string, notes?: string) {
   const cart = await getOrCreateCart(salespersonId);
@@ -288,8 +289,6 @@ async function checkout(salespersonId: string, notes?: string) {
   if (!cart.supplierId || !cart.supplier) {
     throw new AppError('Please select a supplier before checkout.', 400);
   }
-
-  const orderNumber = await generateOrderNumber();
 
   // Compute totals and order lines data before the transaction
   let totalAmount = new Decimal(0);
@@ -311,46 +310,66 @@ async function checkout(salespersonId: string, notes?: string) {
     });
   }
 
-  // Use batch transaction (compatible with PgBouncer connection pooling)
-  // Interactive transactions ($transaction(async (tx) => {...})) are NOT supported
-  // with PgBouncer in transaction pooling mode.
-  const [order] = await prisma.$transaction([
-    prisma.order.create({
-      data: {
-        orderNumber,
-        buyerId: cart.buyerId!,
-        supplierId: cart.supplierId!,
-        salespersonId,
-        status: 'PENDING',
-        totalAmount,
-        notes: notes ?? null,
-        orderLines: {
-          create: orderLinesData,
-        },
-      },
-      include: {
-        orderLines: {
-          include: {
-            product: { select: { id: true, name: true, sku: true, unit: true } },
-          },
-        },
-        buyer: { select: { id: true, name: true, loginId: true, role: true } },
-        supplier: { select: { id: true, name: true, loginId: true, role: true } },
-      },
-    }),
-    prisma.cartItem.deleteMany({
-      where: { cartId: cart.id },
-    }),
-    prisma.cart.update({
-      where: { id: cart.id },
-      data: {
-        buyerId: null,
-        supplierId: null,
-      },
-    }),
-  ]);
+  // Retry loop to handle order number collisions from concurrent requests (e.g. double-tap).
+  // On P2002 (unique constraint violation), regenerate the order number and retry.
+  const MAX_RETRIES = 3;
+  let lastError: unknown;
 
-  return order;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const orderNumber = await generateOrderNumber();
+
+      // Use batch transaction (compatible with PgBouncer connection pooling)
+      const [order] = await prisma.$transaction([
+        prisma.order.create({
+          data: {
+            orderNumber,
+            buyerId: cart.buyerId!,
+            supplierId: cart.supplierId!,
+            salespersonId,
+            status: 'PENDING',
+            totalAmount,
+            notes: notes ?? null,
+            orderLines: {
+              create: orderLinesData,
+            },
+          },
+          include: {
+            orderLines: {
+              include: {
+                product: { select: { id: true, name: true, sku: true, unit: true } },
+              },
+            },
+            buyer: { select: { id: true, name: true, loginId: true, role: true } },
+            supplier: { select: { id: true, name: true, loginId: true, role: true } },
+          },
+        }),
+        prisma.cartItem.deleteMany({
+          where: { cartId: cart.id },
+        }),
+        prisma.cart.update({
+          where: { id: cart.id },
+          data: {
+            buyerId: null,
+            supplierId: null,
+          },
+        }),
+      ]);
+
+      return order;
+    } catch (err: unknown) {
+      lastError = err;
+      const prismaErr = err as { code?: string };
+      // P2002 = unique constraint violation (order number collision) — retry
+      if (prismaErr.code === 'P2002' && attempt < MAX_RETRIES - 1) {
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  // Should not reach here, but just in case
+  throw lastError;
 }
 
 const cartService = {
