@@ -18,12 +18,14 @@ export function handleError(err: Error | AppError | PrismaError | ValidationErro
   });
 
   if ('code' in err && err.code && typeof err.code === 'string' && err.code.startsWith('P')) {
+    const prismaCode = err.code;
+    logger.error('Prisma error:', { code: prismaCode, message: err.message });
     return {
       status: 400,
       body: {
         success: false,
         message: 'Database error occurred',
-        ...(process.env.NODE_ENV === 'development' && { error: err.message }),
+        ...(process.env.NODE_ENV === 'development' && { code: prismaCode, error: err.message }),
       },
     };
   }
