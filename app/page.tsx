@@ -46,6 +46,16 @@ interface Cart {
   items: CartItem[];
 }
 
+// Local order item for retailer direct ordering (not persisted in cart)
+interface OrderDraftItem {
+  productId: string;
+  name: string;
+  sku: string;
+  unit: string | null;
+  price: number;
+  quantity: number;
+}
+
 // ─── API helper ──────────────────────────────────────────────────────
 async function api(
   method: string,
@@ -174,8 +184,15 @@ export default function Home() {
   const [password, setPassword] = useState('password123');
   const [checkoutNotes, setCheckoutNotes] = useState('');
 
+  // Retailer direct order state
+  const [orderDraft, setOrderDraft] = useState<OrderDraftItem[]>([]);
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
+  const [retailerNotes, setRetailerNotes] = useState('');
+
   // Loading
   const [loading, setLoading] = useState<string | null>(null);
+
+  const isRetailer = currentUser?.role === 'RETAILER';
 
   const log = useCallback((entry: ApiResponse) => {
     setLogs((prev) => [entry, ...prev].slice(0, 50));
@@ -241,18 +258,20 @@ export default function Home() {
   }, [call]);
 
   const loadOrders = useCallback(async () => {
-    const res = await call('GET', '/api/dashboard/salesperson', undefined, 'Load Orders');
+    // Use role-appropriate dashboard endpoint
+    const endpoint = isRetailer ? '/api/dashboard/retailer' : '/api/dashboard/salesperson';
+    const res = await call('GET', endpoint, undefined, 'Load Orders');
     if (res?.data?.success) {
       const d = res.data.data as { orders: unknown[] };
       setOrders(d?.orders || []);
     }
-  }, [call]);
+  }, [call, isRetailer]);
 
   useEffect(() => {
     if (token) {
       loadProducts();
       loadUsers();
-      loadCart();
+      if (!isRetailer) loadCart();
       loadOrders();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -295,6 +314,42 @@ export default function Home() {
     if (res?.data?.success) {
       setCheckoutNotes('');
       loadCart();
+      loadOrders();
+    }
+  }
+
+  // ─── Retailer direct order actions ──────────────────────────────
+  function addToOrderDraft(product: Product) {
+    setOrderDraft((prev) => {
+      const existing = prev.find((i) => i.productId === product.id);
+      if (existing) {
+        return prev.map((i) => i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i);
+      }
+      return [...prev, { productId: product.id, name: product.name, sku: product.sku, unit: product.unit, price: Number(product.price), quantity: 1 }];
+    });
+  }
+
+  function updateDraftQuantity(productId: string, quantity: number) {
+    if (quantity < 1) return;
+    setOrderDraft((prev) => prev.map((i) => i.productId === productId ? { ...i, quantity } : i));
+  }
+
+  function removeDraftItem(productId: string) {
+    setOrderDraft((prev) => prev.filter((i) => i.productId !== productId));
+  }
+
+  async function handleRetailerOrder() {
+    if (!selectedSupplierId || orderDraft.length === 0) return;
+    const body = {
+      supplierId: selectedSupplierId,
+      items: orderDraft.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+      ...(retailerNotes ? { notes: retailerNotes } : {}),
+    };
+    const res = await call('POST', '/api/retailer/orders', body, 'Place Order');
+    if (res?.data?.success) {
+      setOrderDraft([]);
+      setRetailerNotes('');
+      setSelectedSupplierId(null);
       loadOrders();
     }
   }
@@ -362,6 +417,14 @@ export default function Home() {
   // ─── Render: Main App ────────────────────────────────────────────
   const buyers = allUsers.filter((u) => ['RETAILER', 'DISTRIBUTOR', 'STOCKIST'].includes(u.role));
   const suppliers = allUsers.filter((u) => ['DISTRIBUTOR', 'STOCKIST', 'ADMIN', 'DEVELOPER'].includes(u.role));
+  const distributors = allUsers.filter((u) => u.role === 'DISTRIBUTOR');
+
+  const refreshAll = () => {
+    loadProducts();
+    loadUsers();
+    if (!isRetailer) loadCart();
+    loadOrders();
+  };
 
   return (
     <div style={{ background: colors.bg, minHeight: '100vh', color: colors.text, fontFamily: "'Inter', system-ui, sans-serif" }}>
@@ -378,7 +441,7 @@ export default function Home() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {loading && <span style={{ fontSize: 12, color: colors.warning, alignSelf: 'center' }}>{loading}...</span>}
-          <button onClick={() => { loadProducts(); loadUsers(); loadCart(); loadOrders(); }} style={ghostBtn}>Refresh All</button>
+          <button onClick={refreshAll} style={ghostBtn}>Refresh All</button>
           <button onClick={handleLogout} style={dangerBtn}>Logout</button>
         </div>
       </header>
@@ -406,7 +469,10 @@ export default function Home() {
                       <span style={{ color: colors.success, fontSize: 13, fontWeight: 600 }}>₹{Number(p.price).toFixed(2)}</span>
                       {p.unit && <span style={{ color: colors.textDim, fontSize: 12 }}> / {p.unit}</span>}
                     </div>
-                    <button onClick={() => addToCart(p.id, 1)} style={{ ...primaryBtn, fontSize: 12, padding: '6px 12px' }}>
+                    <button
+                      onClick={() => isRetailer ? addToOrderDraft(p) : addToCart(p.id, 1)}
+                      style={{ ...primaryBtn, fontSize: 12, padding: '6px 12px' }}
+                    >
                       + Add
                     </button>
                   </div>
@@ -415,57 +481,55 @@ export default function Home() {
             )}
           </section>
 
-          {/* Users (Buyer / Supplier selection) */}
-          <section style={baseCard}>
-            <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, marginBottom: 16 }}>Set Buyer &amp; Supplier</h2>
+          {/* Salesperson: Buyer / Supplier selection */}
+          {!isRetailer && (
+            <section style={baseCard}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, marginBottom: 16 }}>Set Buyer &amp; Supplier</h2>
+              <div style={{ marginBottom: 16 }}>
+                <label style={labelStyle}>Buyer (Retailer / Distributor / Stockist)</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                  {buyers.map((u) => (
+                    <button key={u.id} onClick={() => setBuyer(u.id)} style={{ ...ghostBtn, fontSize: 12, padding: '5px 10px', ...(cart?.buyerId === u.id ? { borderColor: colors.success, color: colors.success } : {}) }}>
+                      {u.name || u.loginId} <span style={{ color: colors.textDim }}>({u.role})</span>
+                    </button>
+                  ))}
+                  {buyers.length === 0 && <span style={{ color: colors.textDim, fontSize: 12 }}>No buyers available</span>}
+                </div>
+              </div>
+              <div>
+                <label style={labelStyle}>Supplier (Distributor / Stockist / Admin)</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                  {suppliers.map((u) => (
+                    <button key={u.id} onClick={() => setSupplier(u.id)} style={{ ...ghostBtn, fontSize: 12, padding: '5px 10px', ...(cart?.supplierId === u.id ? { borderColor: colors.success, color: colors.success } : {}) }}>
+                      {u.name || u.loginId} <span style={{ color: colors.textDim }}>({u.role})</span>
+                    </button>
+                  ))}
+                  {suppliers.length === 0 && <span style={{ color: colors.textDim, fontSize: 12 }}>No suppliers available</span>}
+                </div>
+              </div>
+            </section>
+          )}
 
-            <div style={{ marginBottom: 16 }}>
-              <label style={labelStyle}>Buyer (Retailer / Distributor / Stockist)</label>
+          {/* Retailer: Select Distributor */}
+          {isRetailer && (
+            <section style={baseCard}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, marginBottom: 16 }}>Select Distributor</h2>
+              <label style={labelStyle}>Order from (Distributor)</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
-                {buyers.map((u) => (
-                  <button
-                    key={u.id}
-                    onClick={() => setBuyer(u.id)}
-                    style={{
-                      ...ghostBtn,
-                      fontSize: 12,
-                      padding: '5px 10px',
-                      ...(cart?.buyerId === u.id ? { borderColor: colors.success, color: colors.success } : {}),
-                    }}
-                  >
-                    {u.name || u.loginId} <span style={{ color: colors.textDim }}>({u.role})</span>
+                {distributors.map((u) => (
+                  <button key={u.id} onClick={() => setSelectedSupplierId(u.id)} style={{ ...ghostBtn, fontSize: 12, padding: '5px 10px', ...(selectedSupplierId === u.id ? { borderColor: colors.success, color: colors.success } : {}) }}>
+                    {u.name || u.loginId}
                   </button>
                 ))}
-                {buyers.length === 0 && <span style={{ color: colors.textDim, fontSize: 12 }}>No buyers available</span>}
+                {distributors.length === 0 && <span style={{ color: colors.textDim, fontSize: 12 }}>No distributors available</span>}
               </div>
-            </div>
-
-            <div>
-              <label style={labelStyle}>Supplier (Distributor / Stockist / Admin)</label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
-                {suppliers.map((u) => (
-                  <button
-                    key={u.id}
-                    onClick={() => setSupplier(u.id)}
-                    style={{
-                      ...ghostBtn,
-                      fontSize: 12,
-                      padding: '5px 10px',
-                      ...(cart?.supplierId === u.id ? { borderColor: colors.success, color: colors.success } : {}),
-                    }}
-                  >
-                    {u.name || u.loginId} <span style={{ color: colors.textDim }}>({u.role})</span>
-                  </button>
-                ))}
-                {suppliers.length === 0 && <span style={{ color: colors.textDim, fontSize: 12 }}>No suppliers available</span>}
-              </div>
-            </div>
-          </section>
+            </section>
+          )}
 
           {/* Orders */}
           <section style={baseCard}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>Recent Orders</h2>
+              <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>My Orders</h2>
               <button onClick={loadOrders} style={{ ...ghostBtn, fontSize: 11, padding: '4px 10px' }}>Reload</button>
             </div>
             {(orders as Array<Record<string, unknown>>).length === 0 ? (
@@ -496,110 +560,197 @@ export default function Home() {
         {/* ─── Right Column ─── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-          {/* Cart */}
-          <section style={{ ...baseCard, border: `1px solid ${colors.borderFocus}` }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
-                Cart
-                {cart?.items?.length ? <span style={{ color: colors.textMuted, fontWeight: 400 }}> ({cart.items.length} items)</span> : null}
-              </h2>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button onClick={loadCart} style={{ ...ghostBtn, fontSize: 11, padding: '4px 10px' }}>Reload</button>
-                <button onClick={clearCart} style={{ ...ghostBtn, fontSize: 11, padding: '4px 10px', color: colors.danger, borderColor: colors.danger }}>Clear</button>
+          {/* ══════ Retailer: Direct Order Builder ══════ */}
+          {isRetailer ? (
+            <section style={{ ...baseCard, border: `1px solid ${colors.borderFocus}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
+                  New Order
+                  {orderDraft.length > 0 && <span style={{ color: colors.textMuted, fontWeight: 400 }}> ({orderDraft.length} items)</span>}
+                </h2>
+                {orderDraft.length > 0 && (
+                  <button onClick={() => setOrderDraft([])} style={{ ...ghostBtn, fontSize: 11, padding: '4px 10px', color: colors.danger, borderColor: colors.danger }}>Clear</button>
+                )}
               </div>
-            </div>
 
-            {/* Buyer/Supplier Info */}
-            <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-              <div style={{ flex: 1, padding: '8px 12px', background: colors.bg, borderRadius: 8, border: `1px solid ${colors.border}` }}>
-                <span style={{ fontSize: 11, color: colors.textDim, textTransform: 'uppercase', fontWeight: 600 }}>Buyer</span>
+              {/* Selected Distributor */}
+              <div style={{ padding: '8px 12px', background: colors.bg, borderRadius: 8, border: `1px solid ${colors.border}`, marginBottom: 16 }}>
+                <span style={{ fontSize: 11, color: colors.textDim, textTransform: 'uppercase', fontWeight: 600 }}>Ordering From</span>
                 <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>
-                  {cart?.buyer ? (
-                    <>{cart.buyer.name || cart.buyer.loginId} <span style={{ color: colors.textDim, fontWeight: 400 }}>({cart.buyer.role})</span></>
+                  {selectedSupplierId ? (
+                    (() => {
+                      const d = distributors.find((u) => u.id === selectedSupplierId);
+                      return d ? <>{d.name || d.loginId} <span style={{ color: colors.textDim, fontWeight: 400 }}>(DISTRIBUTOR)</span></> : <span style={{ color: colors.danger }}>Unknown</span>;
+                    })()
                   ) : (
-                    <span style={{ color: colors.danger }}>Not set</span>
+                    <span style={{ color: colors.danger }}>Select a distributor from the left panel</span>
                   )}
                 </div>
               </div>
-              <div style={{ flex: 1, padding: '8px 12px', background: colors.bg, borderRadius: 8, border: `1px solid ${colors.border}` }}>
-                <span style={{ fontSize: 11, color: colors.textDim, textTransform: 'uppercase', fontWeight: 600 }}>Supplier</span>
-                <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>
-                  {cart?.supplier ? (
-                    <>{cart.supplier.name || cart.supplier.loginId} <span style={{ color: colors.textDim, fontWeight: 400 }}>({cart.supplier.role})</span></>
-                  ) : (
-                    <span style={{ color: colors.danger }}>Not set</span>
-                  )}
-                </div>
-              </div>
-            </div>
 
-            {/* Cart Items */}
-            {(!cart?.items || cart.items.length === 0) ? (
-              <p style={{ color: colors.textDim, fontSize: 13, textAlign: 'center', padding: '20px 0' }}>Cart is empty. Add products from the left panel.</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-                {cart.items.map((item) => (
-                  <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: colors.bg, borderRadius: 8, border: `1px solid ${colors.border}` }}>
-                    <div>
-                      <span style={{ fontWeight: 600, fontSize: 14 }}>{item.product.name}</span>
-                      <span style={{ color: colors.textDim, fontSize: 12, marginLeft: 6 }}>{item.product.sku}</span>
-                      <br />
-                      <span style={{ color: colors.textMuted, fontSize: 12 }}>₹{Number(item.unitPrice).toFixed(2)} x {item.quantity} = </span>
-                      <span style={{ color: colors.success, fontSize: 13, fontWeight: 600 }}>₹{(Number(item.unitPrice) * item.quantity).toFixed(2)}</span>
+              {/* Order Items */}
+              {orderDraft.length === 0 ? (
+                <p style={{ color: colors.textDim, fontSize: 13, textAlign: 'center', padding: '20px 0' }}>No items yet. Add products from the left panel.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                  {orderDraft.map((item) => (
+                    <div key={item.productId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: colors.bg, borderRadius: 8, border: `1px solid ${colors.border}` }}>
+                      <div>
+                        <span style={{ fontWeight: 600, fontSize: 14 }}>{item.name}</span>
+                        <span style={{ color: colors.textDim, fontSize: 12, marginLeft: 6 }}>{item.sku}</span>
+                        <br />
+                        <span style={{ color: colors.textMuted, fontSize: 12 }}>₹{item.price.toFixed(2)} x {item.quantity} = </span>
+                        <span style={{ color: colors.success, fontSize: 13, fontWeight: 600 }}>₹{(item.price * item.quantity).toFixed(2)}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <button onClick={() => updateDraftQuantity(item.productId, item.quantity - 1)} style={{ ...ghostBtn, padding: '4px 8px', fontSize: 12 }}>-</button>
+                        <span style={{ fontSize: 14, fontWeight: 600, minWidth: 20, textAlign: 'center' }}>{item.quantity}</span>
+                        <button onClick={() => updateDraftQuantity(item.productId, item.quantity + 1)} style={{ ...ghostBtn, padding: '4px 8px', fontSize: 12 }}>+</button>
+                        <button onClick={() => removeDraftItem(item.productId)} style={{ ...ghostBtn, padding: '4px 8px', fontSize: 12, color: colors.danger, borderColor: colors.danger, marginLeft: 4 }}>✕</button>
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <button onClick={() => updateCartItem(item.id, Math.max(1, item.quantity - 1))} style={{ ...ghostBtn, padding: '4px 8px', fontSize: 12 }}>-</button>
-                      <span style={{ fontSize: 14, fontWeight: 600, minWidth: 20, textAlign: 'center' }}>{item.quantity}</span>
-                      <button onClick={() => updateCartItem(item.id, item.quantity + 1)} style={{ ...ghostBtn, padding: '4px 8px', fontSize: 12 }}>+</button>
-                      <button onClick={() => removeFromCart(item.id)} style={{ ...ghostBtn, padding: '4px 8px', fontSize: 12, color: colors.danger, borderColor: colors.danger, marginLeft: 4 }}>✕</button>
-                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Total */}
+              {orderDraft.length > 0 && (
+                <div style={{ padding: '12px', background: colors.bg, borderRadius: 8, border: `1px solid ${colors.border}`, marginBottom: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 700 }}>
+                    <span>Total</span>
+                    <span style={{ color: colors.success }}>
+                      ₹{orderDraft.reduce((s, i) => s + i.price * i.quantity, 0).toFixed(2)}
+                    </span>
                   </div>
-                ))}
-              </div>
-            )}
+                </div>
+              )}
 
-            {/* Cart Total */}
-            {cart?.items && cart.items.length > 0 && (
-              <div style={{ padding: '12px', background: colors.bg, borderRadius: 8, border: `1px solid ${colors.border}`, marginBottom: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 700 }}>
-                  <span>Total</span>
-                  <span style={{ color: colors.success }}>
-                    ₹{cart.items.reduce((s, i) => s + Number(i.unitPrice) * i.quantity, 0).toFixed(2)}
-                  </span>
+              {/* Notes + Place Order */}
+              <div style={{ marginBottom: 8 }}>
+                <label style={labelStyle}>Order Notes (optional)</label>
+                <input style={inputStyle} value={retailerNotes} onChange={(e) => setRetailerNotes(e.target.value)} placeholder="Any notes for this order..." />
+              </div>
+              <button
+                onClick={handleRetailerOrder}
+                disabled={orderDraft.length === 0 || !selectedSupplierId || loading === 'Place Order'}
+                style={{
+                  ...primaryBtn,
+                  width: '100%',
+                  padding: '12px',
+                  fontSize: 15,
+                  opacity: (orderDraft.length === 0 || !selectedSupplierId) ? 0.4 : 1,
+                  background: colors.success,
+                }}
+              >
+                {loading === 'Place Order' ? 'Placing Order...' : 'Place Order'}
+              </button>
+              {orderDraft.length > 0 && !selectedSupplierId && (
+                <p style={{ color: colors.warning, fontSize: 12, marginTop: 8, textAlign: 'center' }}>
+                  Select a distributor before placing your order.
+                </p>
+              )}
+            </section>
+          ) : (
+            /* ══════ Salesperson: Cart ══════ */
+            <section style={{ ...baseCard, border: `1px solid ${colors.borderFocus}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
+                  Cart
+                  {cart?.items?.length ? <span style={{ color: colors.textMuted, fontWeight: 400 }}> ({cart.items.length} items)</span> : null}
+                </h2>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={loadCart} style={{ ...ghostBtn, fontSize: 11, padding: '4px 10px' }}>Reload</button>
+                  <button onClick={clearCart} style={{ ...ghostBtn, fontSize: 11, padding: '4px 10px', color: colors.danger, borderColor: colors.danger }}>Clear</button>
                 </div>
               </div>
-            )}
 
-            {/* Checkout */}
-            <div style={{ marginBottom: 8 }}>
-              <label style={labelStyle}>Order Notes (optional)</label>
-              <input
-                style={inputStyle}
-                value={checkoutNotes}
-                onChange={(e) => setCheckoutNotes(e.target.value)}
-                placeholder="Any notes for this order..."
-              />
-            </div>
-            <button
-              onClick={handleCheckout}
-              disabled={!cart?.items?.length || !cart?.buyerId || !cart?.supplierId || loading === 'Checkout'}
-              style={{
-                ...primaryBtn,
-                width: '100%',
-                padding: '12px',
-                fontSize: 15,
-                opacity: (!cart?.items?.length || !cart?.buyerId || !cart?.supplierId) ? 0.4 : 1,
-                background: colors.success,
-              }}
-            >
-              {loading === 'Checkout' ? 'Processing...' : 'Checkout — Create Order'}
-            </button>
-            {(!cart?.buyerId || !cart?.supplierId) && cart?.items && cart.items.length > 0 && (
-              <p style={{ color: colors.warning, fontSize: 12, marginTop: 8, textAlign: 'center' }}>
-                Set both buyer and supplier before checkout.
-              </p>
-            )}
-          </section>
+              {/* Buyer/Supplier Info */}
+              <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+                <div style={{ flex: 1, padding: '8px 12px', background: colors.bg, borderRadius: 8, border: `1px solid ${colors.border}` }}>
+                  <span style={{ fontSize: 11, color: colors.textDim, textTransform: 'uppercase', fontWeight: 600 }}>Buyer</span>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>
+                    {cart?.buyer ? (
+                      <>{cart.buyer.name || cart.buyer.loginId} <span style={{ color: colors.textDim, fontWeight: 400 }}>({cart.buyer.role})</span></>
+                    ) : (
+                      <span style={{ color: colors.danger }}>Not set</span>
+                    )}
+                  </div>
+                </div>
+                <div style={{ flex: 1, padding: '8px 12px', background: colors.bg, borderRadius: 8, border: `1px solid ${colors.border}` }}>
+                  <span style={{ fontSize: 11, color: colors.textDim, textTransform: 'uppercase', fontWeight: 600 }}>Supplier</span>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>
+                    {cart?.supplier ? (
+                      <>{cart.supplier.name || cart.supplier.loginId} <span style={{ color: colors.textDim, fontWeight: 400 }}>({cart.supplier.role})</span></>
+                    ) : (
+                      <span style={{ color: colors.danger }}>Not set</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Cart Items */}
+              {(!cart?.items || cart.items.length === 0) ? (
+                <p style={{ color: colors.textDim, fontSize: 13, textAlign: 'center', padding: '20px 0' }}>Cart is empty. Add products from the left panel.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                  {cart.items.map((item) => (
+                    <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: colors.bg, borderRadius: 8, border: `1px solid ${colors.border}` }}>
+                      <div>
+                        <span style={{ fontWeight: 600, fontSize: 14 }}>{item.product.name}</span>
+                        <span style={{ color: colors.textDim, fontSize: 12, marginLeft: 6 }}>{item.product.sku}</span>
+                        <br />
+                        <span style={{ color: colors.textMuted, fontSize: 12 }}>₹{Number(item.unitPrice).toFixed(2)} x {item.quantity} = </span>
+                        <span style={{ color: colors.success, fontSize: 13, fontWeight: 600 }}>₹{(Number(item.unitPrice) * item.quantity).toFixed(2)}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <button onClick={() => updateCartItem(item.id, Math.max(1, item.quantity - 1))} style={{ ...ghostBtn, padding: '4px 8px', fontSize: 12 }}>-</button>
+                        <span style={{ fontSize: 14, fontWeight: 600, minWidth: 20, textAlign: 'center' }}>{item.quantity}</span>
+                        <button onClick={() => updateCartItem(item.id, item.quantity + 1)} style={{ ...ghostBtn, padding: '4px 8px', fontSize: 12 }}>+</button>
+                        <button onClick={() => removeFromCart(item.id)} style={{ ...ghostBtn, padding: '4px 8px', fontSize: 12, color: colors.danger, borderColor: colors.danger, marginLeft: 4 }}>✕</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Cart Total */}
+              {cart?.items && cart.items.length > 0 && (
+                <div style={{ padding: '12px', background: colors.bg, borderRadius: 8, border: `1px solid ${colors.border}`, marginBottom: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 700 }}>
+                    <span>Total</span>
+                    <span style={{ color: colors.success }}>
+                      ₹{cart.items.reduce((s, i) => s + Number(i.unitPrice) * i.quantity, 0).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Checkout */}
+              <div style={{ marginBottom: 8 }}>
+                <label style={labelStyle}>Order Notes (optional)</label>
+                <input style={inputStyle} value={checkoutNotes} onChange={(e) => setCheckoutNotes(e.target.value)} placeholder="Any notes for this order..." />
+              </div>
+              <button
+                onClick={handleCheckout}
+                disabled={!cart?.items?.length || !cart?.buyerId || !cart?.supplierId || loading === 'Checkout'}
+                style={{
+                  ...primaryBtn,
+                  width: '100%',
+                  padding: '12px',
+                  fontSize: 15,
+                  opacity: (!cart?.items?.length || !cart?.buyerId || !cart?.supplierId) ? 0.4 : 1,
+                  background: colors.success,
+                }}
+              >
+                {loading === 'Checkout' ? 'Processing...' : 'Checkout — Create Order'}
+              </button>
+              {(!cart?.buyerId || !cart?.supplierId) && cart?.items && cart.items.length > 0 && (
+                <p style={{ color: colors.warning, fontSize: 12, marginTop: 8, textAlign: 'center' }}>
+                  Set both buyer and supplier before checkout.
+                </p>
+              )}
+            </section>
+          )}
 
           {/* API Response Log */}
           <LogPanel logs={logs} onClear={() => setLogs([])} />
