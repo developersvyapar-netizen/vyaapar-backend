@@ -169,9 +169,9 @@ model Order {
   supplierId    String
   supplier      User        @relation("OrderSupplier", fields: [supplierId], references: [id])
   
-  // Salesperson who created the order on behalf of buyer
-  salespersonId String
-  salesperson   User        @relation("OrderSalesperson", fields: [salespersonId], references: [id])
+  // Salesperson who created the order on behalf of buyer (null for self-orders)
+  salespersonId String?
+  salesperson   User?       @relation("OrderSalesperson", fields: [salespersonId], references: [id])
   
   status        OrderStatus @default(PENDING)
   totalAmount   Decimal     @db.Decimal(10, 2) @default(0)

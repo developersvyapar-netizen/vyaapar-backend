@@ -50,10 +50,12 @@ export async function GET(
     }
 
     const isAdmin = ADMIN_ROLES.includes(user.role);
-    const isOrderSalesperson = user.userId === order.salespersonId;
+    const isOrderSalesperson = order.salespersonId && user.userId === order.salespersonId;
+    const isOrderBuyer = user.userId === order.buyerId;
+    const isOrderSupplier = user.userId === order.supplierId;
 
-    if (!isAdmin && !isOrderSalesperson) {
-      throw new AppError('Access denied. You can only view orders you created, or have admin access.', 403);
+    if (!isAdmin && !isOrderSalesperson && !isOrderBuyer && !isOrderSupplier) {
+      throw new AppError('Access denied. You can only view orders you are part of, or have admin access.', 403);
     }
 
     return NextResponse.json({
