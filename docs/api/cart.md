@@ -21,7 +21,7 @@ This document covers the shopping cart and order creation endpoints. Salesperson
 | `/api/cart/buyer` | PUT | Yes | SALESPERSON |
 | `/api/cart/supplier` | PUT | Yes | SALESPERSON |
 | `/api/cart/checkout` | POST | Yes | SALESPERSON |
-| `/api/orders/:id` | GET | Yes | ADMIN, DEVELOPER, or order's salesperson |
+| `/api/orders/:id` | GET | Yes | ADMIN, DEVELOPER, order's salesperson, buyer, or supplier |
 
 ---
 
@@ -336,7 +336,7 @@ curl -X POST http://localhost:3000/api/cart/checkout \
 
 Get a single order with full details: order lines (with product snapshot), buyer, supplier, and salesperson. Useful for viewing order details after creation or from the dashboard list.
 
-**Access:** ADMIN, DEVELOPER, or the salesperson who created the order. Others receive 403.
+**Access:** ADMIN, DEVELOPER, the order's salesperson (if any), buyer, or supplier. Others receive 403.
 
 #### Request
 
@@ -387,7 +387,7 @@ curl http://localhost:3000/api/orders/ORDER_UUID \
 #### Error Responses
 
 **Order not found (404)**  
-**Access denied (403)** – User is not admin and not the salesperson who created the order
+**Access denied (403)** – User is not admin, salesperson, buyer, or supplier on this order
 
 ---
 
