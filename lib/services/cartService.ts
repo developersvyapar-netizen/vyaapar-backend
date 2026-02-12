@@ -15,43 +15,55 @@ const BUYER_SUPPLIER_MAP: Record<UserRole, UserRole[]> = {
   SALESPERSON: [],
 };
 
+/** Shared include for full cart responses */
+const CART_FULL_INCLUDE = {
+  items: {
+    include: {
+      product: {
+        select: { id: true, name: true, sku: true, unit: true },
+      },
+    },
+  },
+  buyer: { select: { id: true, name: true, loginId: true, role: true } },
+  supplier: { select: { id: true, name: true, loginId: true, role: true } },
+} as const;
+
 /**
  * Get or create cart for salesperson. Returns cart with items.
  */
 async function getOrCreateCart(salespersonId: string) {
   let cart = await prisma.cart.findUnique({
     where: { salespersonId },
-    include: {
-      items: {
-        include: {
-          product: {
-            select: { id: true, name: true, sku: true, unit: true },
-          },
-        },
-      },
-      buyer: { select: { id: true, name: true, loginId: true, role: true } },
-      supplier: { select: { id: true, name: true, loginId: true, role: true } },
-    },
+    include: CART_FULL_INCLUDE,
   });
 
   if (!cart) {
     cart = await prisma.cart.create({
       data: { salespersonId },
-      include: {
-        items: {
-          include: {
-            product: {
-              select: { id: true, name: true, sku: true, unit: true },
-            },
-          },
-        },
-        buyer: { select: { id: true, name: true, loginId: true, role: true } },
-        supplier: { select: { id: true, name: true, loginId: true, role: true } },
-      },
+      include: CART_FULL_INCLUDE,
     });
   }
 
   return cart;
+}
+
+/**
+ * Lightweight: get or create cart returning only the id (no JOINs).
+ * Use when you only need cart.id for subsequent writes.
+ */
+async function ensureCartId(salespersonId: string): Promise<string> {
+  const cart = await prisma.cart.findUnique({
+    where: { salespersonId },
+    select: { id: true },
+  });
+
+  if (cart) return cart.id;
+
+  const created = await prisma.cart.create({
+    data: { salespersonId },
+    select: { id: true },
+  });
+  return created.id;
 }
 
 /**
@@ -65,11 +77,11 @@ async function getCart(salespersonId: string) {
  * Add item to cart. Uses current product price. If product already in cart, updates quantity.
  */
 async function addItem(salespersonId: string, productId: string, quantity: number) {
-  const cart = await getOrCreateCart(salespersonId);
-
-  const product = await prisma.product.findUnique({
-    where: { id: productId },
-  });
+  // Lightweight cart fetch (no JOINs) + product lookup in parallel
+  const [cartId, product] = await Promise.all([
+    ensureCartId(salespersonId),
+    prisma.product.findUnique({ where: { id: productId } }),
+  ]);
 
   if (!product) {
     throw new AppError('Product not found', 404);
@@ -77,30 +89,13 @@ async function addItem(salespersonId: string, productId: string, quantity: numbe
 
   const unitPrice = product.price;
 
-  const existing = await prisma.cartItem.findUnique({
+  // Upsert: create or update cart item in a single query
+  return prisma.cartItem.upsert({
     where: {
-      cartId_productId: { cartId: cart.id, productId },
+      cartId_productId: { cartId, productId },
     },
-  });
-
-  if (existing) {
-    const newQuantity = existing.quantity + quantity;
-    return prisma.cartItem.update({
-      where: { id: existing.id },
-      data: { quantity: newQuantity, unitPrice },
-      include: {
-        product: { select: { id: true, name: true, sku: true, unit: true } },
-      },
-    });
-  }
-
-  return prisma.cartItem.create({
-    data: {
-      cartId: cart.id,
-      productId,
-      quantity,
-      unitPrice,
-    },
+    update: { quantity: { increment: quantity }, unitPrice },
+    create: { cartId, productId, quantity, unitPrice },
     include: {
       product: { select: { id: true, name: true, sku: true, unit: true } },
     },
@@ -111,13 +106,13 @@ async function addItem(salespersonId: string, productId: string, quantity: numbe
  * Update cart item quantity.
  */
 async function updateItem(salespersonId: string, itemId: string, quantity: number) {
-  const cart = await getOrCreateCart(salespersonId);
+  // Lightweight cart fetch + item lookup in parallel
+  const [cartId, item] = await Promise.all([
+    ensureCartId(salespersonId),
+    prisma.cartItem.findUnique({ where: { id: itemId }, select: { id: true, cartId: true } }),
+  ]);
 
-  const item = await prisma.cartItem.findFirst({
-    where: { id: itemId, cartId: cart.id },
-  });
-
-  if (!item) {
+  if (!item || item.cartId !== cartId) {
     throw new AppError('Cart item not found', 404);
   }
 
@@ -134,13 +129,13 @@ async function updateItem(salespersonId: string, itemId: string, quantity: numbe
  * Remove item from cart.
  */
 async function removeItem(salespersonId: string, itemId: string) {
-  const cart = await getOrCreateCart(salespersonId);
+  // Lightweight cart fetch + item lookup in parallel
+  const [cartId, item] = await Promise.all([
+    ensureCartId(salespersonId),
+    prisma.cartItem.findUnique({ where: { id: itemId }, select: { id: true, cartId: true } }),
+  ]);
 
-  const item = await prisma.cartItem.findFirst({
-    where: { id: itemId, cartId: cart.id },
-  });
-
-  if (!item) {
+  if (!item || item.cartId !== cartId) {
     throw new AppError('Cart item not found', 404);
   }
 
@@ -152,11 +147,13 @@ async function removeItem(salespersonId: string, itemId: string) {
 }
 
 /**
- * Clear entire cart (delete all items and optionally reset buyer/supplier).
+ * Clear entire cart (delete all items and reset buyer/supplier).
  */
 async function clearCart(salespersonId: string) {
+  // salespersonId is unique on Cart, so we can update directly without fetching first
   const cart = await prisma.cart.findUnique({
     where: { salespersonId },
+    select: { id: true },
   });
 
   if (!cart) {
@@ -164,7 +161,7 @@ async function clearCart(salespersonId: string) {
   }
 
   await prisma.cart.update({
-    where: { id: cart.id },
+    where: { salespersonId },
     data: {
       items: { deleteMany: {} },
       buyerId: null,
@@ -179,11 +176,11 @@ async function clearCart(salespersonId: string) {
  * Set buyer for cart. Buyer must be RETAILER, DISTRIBUTOR, or STOCKIST.
  */
 async function setBuyer(salespersonId: string, buyerId: string) {
-  const cart = await getOrCreateCart(salespersonId);
-
-  const buyer = await prisma.user.findUnique({
-    where: { id: buyerId, isActive: true },
-  });
+  // Lightweight cart ID + buyer validation in parallel
+  const [cartId, buyer] = await Promise.all([
+    ensureCartId(salespersonId),
+    prisma.user.findUnique({ where: { id: buyerId, isActive: true } }),
+  ]);
 
   if (!buyer) {
     throw new AppError('Buyer not found', 404);
@@ -196,35 +193,41 @@ async function setBuyer(salespersonId: string, buyerId: string) {
     );
   }
 
-  await prisma.cart.update({
-    where: { id: cart.id },
+  // Update and return full cart in a single query (no second getOrCreateCart)
+  return prisma.cart.update({
+    where: { id: cartId },
     data: { buyerId },
+    include: CART_FULL_INCLUDE,
   });
-
-  return getOrCreateCart(salespersonId);
 }
 
 /**
  * Set supplier for cart. Validates buyer-supplier hierarchy.
  */
 async function setSupplier(salespersonId: string, supplierId: string) {
-  const cart = await getOrCreateCart(salespersonId);
+  // Lightweight cart fetch (only id + buyerId needed for validation)
+  const cart = await prisma.cart.findUnique({
+    where: { salespersonId },
+    select: { id: true, buyerId: true },
+  });
+
+  if (!cart) {
+    throw new AppError('Cart not found. Add an item first.', 404);
+  }
 
   if (!cart.buyerId) {
     throw new AppError('Please set buyer before setting supplier', 400);
   }
 
-  const buyer = await prisma.user.findUnique({
-    where: { id: cart.buyerId },
-  });
+  // Buyer + supplier validation in parallel
+  const [buyer, supplier] = await Promise.all([
+    prisma.user.findUnique({ where: { id: cart.buyerId } }),
+    prisma.user.findUnique({ where: { id: supplierId, isActive: true } }),
+  ]);
 
   if (!buyer) {
     throw new AppError('Buyer not found', 404);
   }
-
-  const supplier = await prisma.user.findUnique({
-    where: { id: supplierId, isActive: true },
-  });
 
   if (!supplier) {
     throw new AppError('Supplier not found', 404);
@@ -238,12 +241,12 @@ async function setSupplier(salespersonId: string, supplierId: string) {
     );
   }
 
-  await prisma.cart.update({
+  // Update and return full cart in a single query (no second getOrCreateCart)
+  return prisma.cart.update({
     where: { id: cart.id },
     data: { supplierId },
+    include: CART_FULL_INCLUDE,
   });
-
-  return getOrCreateCart(salespersonId);
 }
 
 /**
