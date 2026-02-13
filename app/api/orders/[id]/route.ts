@@ -10,7 +10,7 @@ const ADMIN_ROLES: UserRole[] = ['ADMIN', 'DEVELOPER'];
 /**
  * GET /api/orders/:id
  * Get a single order with full details (order lines, buyer, supplier, salesperson).
- * Access: ADMIN, DEVELOPER, or the salesperson who created the order.
+ * Access: ADMIN, DEVELOPER, the order's salesperson (if any), buyer, or supplier.
  */
 export async function GET(
   request: NextRequest,
