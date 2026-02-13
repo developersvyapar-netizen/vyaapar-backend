@@ -95,16 +95,17 @@ export async function GET(request: NextRequest) {
     }
 
     if (startDate || endDate) {
-      where.createdAt = {};
+      const createdAtFilter: { gte?: Date; lte?: Date } = {};
       if (startDate) {
-        where.createdAt.gte = new Date(startDate);
+        createdAtFilter.gte = new Date(startDate);
       }
       if (endDate) {
         // Include the entire end date
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
-        where.createdAt.lte = end;
+        createdAtFilter.lte = end;
       }
+      where.createdAt = createdAtFilter;
     }
 
     const skip = (page - 1) * limit;
